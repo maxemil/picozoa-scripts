@@ -16,28 +16,44 @@ for f in glob.glob('Orthogroup_Sequences/*'):
         groups[group] += 1
     if groups['Cyanobacteria'] > 0:
         cyano_ogs.append(f)
-
-focus_taxa = ['Rhodelphis',
-                'Amoebozoa',
-                'Hematodinium',
-                'Cryptosporidium',
-                'Polytomella',
-                'Helicosporidium',
-                'Glaucophyta',
-                'Pedospumella',
-                'Poteriospumella',
-                'Paraphysomonas',
-                'Cornospumella',
-                'Uroglena',
-                'Dinobryon', 
-                'Poterioochromonas', 
-                'Synura',
-                'Telonema',
-                'Paulinella']
-
+# 
+focus_taxa = ['Rattus',
+              'Telonema',
+              'Dictyostelium',
+              'Tetrahymena',
+              'Thecamonas',
+              'Phytophthora',
+              'Neurospora',
+              'Galdieria',
+              'Chloropicon',
+              'Arabidopsis',
+              'Cyanophora',
+              'Emiliania',
+              'Bigelowiella',
+              'Leptocylindrus',
+              'Guillardia',
+              'Vitrella',
+              'Paulinella',
+              'Dinobryon_sp_UTEXLB2267',
+              'Mallomonas',
+              'Ochromonadales_sp_CCMP2298',
+              'Alexandrium',
+              'Pedospumella_elongata',
+              'Paraphysomonas_bandaiensis',
+              'Spumella_bureschii_JBL14',
+              'Rhodelphis',
+              'Toxoplasma',
+              'Cryptosporidium',
+              'Hematodinium',
+              'Helicosporidium',
+              'Polytomella', 
+              'Goniomonas',
+              'Cryptomonas']
+              # 'Picozoa',
+              
 for focus_taxon in focus_taxa:
     tbl = pd.read_csv('taxonomy_orthofinder_selection.csv', sep='\t')
-    tbl.loc[tbl['taxonomy'].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
+    tbl.loc[tbl['Name'].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
     tblgroups = set(tbl['group'])
 
     selection = []
@@ -59,9 +75,9 @@ for focus_taxon in focus_taxa:
 
 os.makedirs('Orthogroup_added_Selection/')
 added_ogs = set()
-picozoa_ogs = set([os.path.basename(p) for p in glob.glob('Orthogroup_Selection_Picozoa/*')])
+picozoa_ogs = set([os.path.basename(p) for p in glob.glob('Orthogroup_alignments_trees/orthogroups/*')])
 for focus_taxon in focus_taxa:
-    taxon_ogs = set([os.path.basename(p) for p in glob.glob('Orthogroup_Selection_{}/*'.format(focus_taxon))])
+    taxon_ogs = set([os.path.basename(p) for p in glob.glob('Orthogroup_Selection_{}/orthogroups/*'.format(focus_taxon))])
     print('Picozoa ({}) - {} ({}): {}'.format(len(picozoa_ogs), focus_taxon, len(taxon_ogs), len(picozoa_ogs.intersection(taxon_ogs))))
     added_ogs = added_ogs.union(taxon_ogs.difference(picozoa_ogs))
 for f in added_ogs:
