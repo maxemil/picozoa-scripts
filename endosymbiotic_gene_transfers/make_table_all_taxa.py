@@ -142,6 +142,15 @@ for t in taxa:
     else:
         print(t)
 
+for d in glob.glob('BUSCO_results_eukaryota/[!busco]*'):
+    if not os.path.basename(d).startswith('EP'):
+        f = "{}/run_eukaryota_odb10/full_table.tsv".format(d)
+        bo = pd.read_csv(f, sep ='\t', skiprows=2)
+        bo = bo.drop_duplicates('# Busco id')
+        bo["Status"] = bo["Status"].apply(lambda x: 0 if x== "Missing" else 1)
+        assert len(bo['Status']) == 255
+        tbl.loc[tbl['Name'] == d.split('/')[1], 'completeness'] = bo['Status'].sum()/len(bo['Status'])
+
 tbl.to_csv('taxonomy_orthofinder_selection.csv', sep='\t', index=False, header=True)
 
 picozoa_taxa = set(tbl[tbl['group'] == 'Picozoa']['Name'])
