@@ -6,10 +6,12 @@ treefile = sys.argv[1]
 
 focus_taxon = sys.argv[2]
 
+column = sys.argv[3]
+
 df = pd.read_csv("taxonomy_orthofinder_selection.csv", sep='\t')
 tree = ete3.PhyloTree(treefile, format=2)
 
-df.loc[df['taxonomy'].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
+df.loc[df[column].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
 
 for l in tree.iter_leaves():
     sp = l.name.split('..')[0]
