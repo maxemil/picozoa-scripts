@@ -3,8 +3,14 @@ import ete3
 from collections import defaultdict
 import shutil
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import multiprocessing as mp
+import copy
 
-plastid_groups = ['Apicomplexa',
+# import upsetplot
+PLASTID_GROUP = ['Apicomplexa',
                  'Chlorarachniophyceae',
                  'Chloroplastida',
                  'Colpodellida',
@@ -21,19 +27,69 @@ plastid_groups = ['Apicomplexa',
                  'Rhodophyta']
 
 
-def find_sisters(tree, mincount, groupOI):
+def find_sisters(tree, mincount, taxon):
+    plastid_groups = PLASTID_GROUP + [taxon]
     for n in tree.traverse():
         if not n.is_leaf():
-            taxa_count_c1 = count_taxa(n.get_children()[0])
-            plastid_count_c1 = count_plastid(taxa_count_c1)
-            taxa_count_c2 = count_taxa(n.get_children()[1])
-            plastid_count_c2 = count_plastid(taxa_count_c2)
-            if is_clade_monophyletic(plastid_count_c1, 'plastid') and taxa_count_c1[groupOI] >= mincount and is_clade_monophyletic(taxa_count_c2, 'Cyanobacteria') or \
-                 is_clade_monophyletic(plastid_count_c2, 'plastid') and taxa_count_c2[groupOI] >= mincount and is_clade_monophyletic(taxa_count_c1, 'Cyanobacteria'):
-                 return True
+            taxa_count_c1, plastid_count_c1 = count_clade(n.get_children()[0], plastid_groups)
+            taxa_count_c2, plastid_count_c2 = count_clade(n.get_children()[1], plastid_groups)
+            if check_cyano_sister(taxa_count_c1, taxa_count_c2, 
+                                  plastid_count_c1, plastid_count_c2, 
+                                  taxon, mincount, n.get_children()[0],
+                                  plastid_groups):
+                return True
+            elif check_cyano_sister(taxa_count_c2, taxa_count_c1, 
+                                  plastid_count_c2, plastid_count_c1, 
+                                  taxon, mincount, n.get_children()[1],
+                                  plastid_groups):
+                return True
     return False
 
-def count_plastid(taxa_count):
+def check_cyano_sister(tc1, tc2, pc1, pc2, taxon, mincount, lca, plastid_groups):
+    if taxon == 'Picozoa':
+        if not check_Picozoa_mono(lca, taxon):
+            return False
+    if is_clade_monophyletic(pc1, 'plastid') \
+            and tc1[taxon] >= mincount \
+            and check_direct_sister(lca, taxon, plastid_groups) \
+            and is_clade_monophyletic(tc2, 'Cyanobacteria') \
+            and tc2['Cyanobacteria'] >= 2:
+        return True
+
+def check_Picozoa_mono(lca, taxon):
+    if len(set([l.name.split('..')[1] for l in lca.get_leaves() if l.clade == taxon])) < 2:
+        return False
+    for clade in get_mono_clades(lca, taxon):
+        if len(clade.get_leaves()) > 1:
+            return True
+    return False
+    
+def get_mono_clades(node, taxon):
+    seeds = set([l for l in node.get_leaves() if l.clade == taxon])
+    nodes = set()
+    for s in seeds:
+        n = s
+        while all([l.clade == taxon for l in n.up.get_leaves()]):
+            n = n.up
+        nodes.add(n)
+    return nodes
+                
+def check_direct_sister(node, taxon, plastid_groups):
+    euk_plastid_groups = copy.copy(plastid_groups)
+    if not taxon == 'Paulinella': 
+        euk_plastid_groups.remove('Cyanobacteria')
+    for n in get_mono_clades(node, taxon):
+        sister = n.up.get_children()[0] if not n.up.get_children()[0] == n else n.up.get_children()[1]
+        taxa_count, plastid_count = count_clade(sister, euk_plastid_groups)
+        if is_clade_monophyletic(plastid_count, 'plastid'):
+            return True
+
+def count_clade(node, plastid_groups):
+    taxa_count = count_taxa(node)
+    plastid_count = count_plastid(taxa_count, plastid_groups)
+    return taxa_count, plastid_count
+
+def count_plastid(taxa_count, plastid_groups):
     plastid_count = {'plastid':0, 'other':0}
     for k,v in taxa_count.items():
         if k in plastid_groups:
@@ -42,8 +98,8 @@ def count_plastid(taxa_count):
             plastid_count['other'] += v
     return plastid_count
 
-def is_clade_monophyletic(taxa_count, group, impurity=0.1):
-    if taxa_count[group] >= (1-impurity) * sum(taxa_count.values()):
+def is_clade_monophyletic(taxa_count, taxon, impurity=0.1):
+    if taxa_count[taxon] >= (1-impurity) * sum(taxa_count.values()):
         return True
     else:
         return False
@@ -53,14 +109,128 @@ def count_taxa(node):
     for l in node.iter_leaves():
         taxa_count[l.clade] += 1
     return taxa_count
-    
-count = 0
-for f in glob.glob("Orthogroup_alignments_trees/trees/*.groupname.treefile"):
+              
+def check_tree(f, taxon):
     tree = ete3.PhyloTree(f, format=2)
     for l in tree.iter_leaves():
         l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
-    if find_sisters(tree, 1, 'Rhodelphis'):
-        print(f)
-        # shutil.copyfile(f.replace('groupname.treefile', 'nex'), "/local/two/Exchange/projects/Picozoa/20_endosymbiotic_origin_genes/orthogroup_EGTs/{}".format(os.path.basename(f).replace('groupname.treefile', 'nex')))
-        count += 1
-print(count)
+    min_count = 2 if taxon == 'Picozoa' else 1
+    if find_sisters(tree, min_count, taxon):
+        shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
+        shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+        return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
+    else:
+        tree.set_outgroup(tree.get_midpoint_outgroup())
+        if find_sisters(tree, min_count, taxon):
+            shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
+            shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+            return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
+
+taxon2count = {}
+focus_taxa = ['Rattus',
+              'Telonema',
+              'Dictyostelium',
+              'Tetrahymena',
+              'Thecamonas',
+              'Phytophthora',
+              'Neurospora',
+              'Galdieria',
+              'Chloropicon',
+              'Arabidopsis',
+              'Cyanophora',
+              'Emiliania',
+              'Bigelowiella',
+              'Leptocylindrus',
+              'Guillardia',
+              'Vitrella',
+              'Paulinella',
+              'Dinobryon_sp_UTEXLB2267',
+              'Mallomonas',
+              'Ochromonadales_sp_CCMP2298',
+              'Alexandrium',
+              'Pedospumella_elongata',
+              'Paraphysomonas_bandaiensis',
+              'Spumella_bureschii_JBL14',
+              'Rhodelphis',
+              'Toxoplasma',
+              'Cryptosporidium',
+              'Hematodinium',
+              'Helicosporidium',
+              'Polytomella', 
+              'Goniomonas',
+              'Cryptomonas',
+              'Picozoa']
+
+pool = mp.Pool(30)
+for taxon in focus_taxa:
+    os.makedirs("Orthogroup_Selection_{}/EGTs".format(taxon), exist_ok=True)
+    files = glob.glob("Orthogroup_Selection_{}/trees/*.{}.treefile".format(taxon, taxon))
+    results = pool.starmap(check_tree, list(zip(files, [taxon] * len(files))))
+    results = [i for i in results if i]
+    print(taxon, len(results))
+    taxon2count[taxon] = results
+pool.close()
+
+tbl = pd.read_csv('taxonomy_orthofinder_selection.csv', sep='\t')
+taxon2label = {}
+for t in focus_taxa:
+    taxon2label[t] = tbl.loc[tbl['Name'].apply(lambda x: t in x), 'Name'].iloc[0].replace('_', ' ')
+taxon2label['Rhodelphis'] = 'Rhodelphis'
+taxon2label['Picozoa'] = 'Picozoa'
+
+
+cols = {} 
+for t in ['Galdieria', 'Chloropicon', 'Arabidopsis', 'Cyanophora', 'Emiliania',
+      'Bigelowiella', 'Leptocylindrus', 'Guillardia', 'Vitrella', 'Paulinella',
+      'Dinobryon_sp_UTEXLB2267', 'Mallomonas','Ochromonadales_sp_CCMP2298',
+      'Alexandrium']:
+      cols[t] = 'green' 
+for t in ['Pedospumella_elongata', 'Paraphysomonas_bandaiensis',
+      'Spumella_bureschii_JBL14', 'Rhodelphis', 'Toxoplasma', 'Helicosporidium',
+      'Polytomella', 'Goniomonas', 'Cryptomonas']:
+      cols[t] = 'blue'
+for t in ['Cryptosporidium', 'Hematodinium']:
+    cols[t] = 'darkblue'
+for t in ['Rattus', 'Telonema', 'Dictyostelium', 'Tetrahymena','Thecamonas', 
+       'Phytophthora', 'Neurospora']:
+       cols[t] = 'black'
+cols['Picozoa'] = 'red'
+
+fig, axs = plt.subplots(1, 2, figsize=(20,10))
+
+df = pd.DataFrame(taxon2count.keys())
+df.columns = ['Taxon']
+df['Count'] = df['Taxon'].apply(lambda x: len(taxon2count[x]))
+df['Color'] = df['Taxon'].apply(lambda x: cols[x])
+df.sort_values(by='Count', inplace=True)
+df['Label'] = df.apply(lambda x: "{} ({})".format(taxon2label[x['Taxon']], x['Count']), axis=1)
+df['Label2'] = df.apply(lambda x: "{}".format(taxon2label[x['Taxon']], x['Count']), axis=1)
+sns.barplot(x="Count", y="Label", data=df, palette=df['Color'], ax=axs[0])
+axs[0].set_ylabel('Taxon')
+
+for tick in axs[0].get_yticklabels():
+    tick.set_color(df.loc[df['Label'] == tick.get_text(), 'Color'].iloc[0])
+axs[0].spines["right"].set_visible(False)
+axs[0].spines["top"].set_visible(False)
+axs[0].spines["bottom"].set_visible(False)
+axs[0].spines["left"].set_visible(False)
+
+p2p = pd.DataFrame(index=df['Taxon'], columns=df['Taxon'])
+for t1 in df['Taxon']:
+    for t2 in df['Taxon']:
+        p2p.loc[t1,t2] = len(set(taxon2count[t1]).intersection(set(taxon2count[t2])))
+p2p = p2p[p2p.columns].astype(int)
+sns.heatmap(p2p, xticklabels=True, yticklabels=True, cmap="YlGnBu", ax=axs[1])
+axs[1].set_yticklabels('')
+axs[1].set_xticklabels(df['Label2'])
+axs[1].set_ylabel('')
+for tick in axs[1].get_xticklabels():
+    tick.set_color(df.loc[df['Label2'] == tick.get_text(), 'Color'].iloc[0])
+plt.tight_layout()
+plt.savefig('EGT_groups_90.pdf')
+plt.clf()
+
+# tc = upsetplot.from_contents(taxon2count)
+# fig, axs = plt.subplots(figsize=(30,40))
+# upsetplot.plot(tc, sort_by='cardinality', fig=fig, show_counts=True)
+# plt.savefig('test.pdf')
