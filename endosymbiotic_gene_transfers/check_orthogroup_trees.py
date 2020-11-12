@@ -6,6 +6,7 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import numpy as np
 import multiprocessing as mp
 import copy
 
@@ -37,11 +38,13 @@ def find_sisters(tree, mincount, taxon):
                                   plastid_count_c1, plastid_count_c2, 
                                   taxon, mincount, n.get_children()[0],
                                   plastid_groups):
+                # print(get_mono_clades(n, taxon))
                 return True
             elif check_cyano_sister(taxa_count_c2, taxa_count_c1, 
                                   plastid_count_c2, plastid_count_c1, 
                                   taxon, mincount, n.get_children()[1],
                                   plastid_groups):
+                # print(get_mono_clades(n, taxon))
                 return True
     return False
 
@@ -60,7 +63,7 @@ def check_Picozoa_mono(lca, taxon):
     if len(set([l.name.split('..')[1] for l in lca.get_leaves() if l.clade == taxon])) < 2:
         return False
     for clade in get_mono_clades(lca, taxon):
-        if len(clade.get_leaves()) > 1:
+        if len(set([l.name.split('..')[1] for l in clade.get_leaves()])) > 1:
             return True
     return False
     
@@ -78,10 +81,14 @@ def check_direct_sister(node, taxon, plastid_groups):
     euk_plastid_groups = copy.copy(plastid_groups)
     if not taxon == 'Paulinella': 
         euk_plastid_groups.remove('Cyanobacteria')
+        euk_plastid_groups.remove('Paulinella')
     for n in get_mono_clades(node, taxon):
+        if taxon == 'Picozoa':
+            if not check_Picozoa_mono(n, taxon):
+                continue
         sister = n.up.get_children()[0] if not n.up.get_children()[0] == n else n.up.get_children()[1]
         taxa_count, plastid_count = count_clade(sister, euk_plastid_groups)
-        if is_clade_monophyletic(plastid_count, 'plastid'):
+        if is_clade_monophyletic(plastid_count, 'plastid', impurity=0.01):
             return True
 
 def count_clade(node, plastid_groups):
@@ -113,7 +120,10 @@ def count_taxa(node):
 def check_tree(f, taxon):
     tree = ete3.PhyloTree(f, format=2)
     for l in tree.iter_leaves():
-        l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
+        if 'Uroglena_WA34KE' in l.name:
+            l.add_feature(pr_name='clade', pr_value='contamination')
+        else:
+            l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
     min_count = 2 if taxon == 'Picozoa' else 1
     if find_sisters(tree, min_count, taxon):
         shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
@@ -171,6 +181,11 @@ for taxon in focus_taxa:
     taxon2count[taxon] = results
 pool.close()
 
+
+pd.Series(['OG0001421','OG0001259','OG0002552','OG0002725','OG0003800','OG0003816',
+            'OG0004004','OG0004116','OG0004388','OG0009417','OG0011992','OG0018782',
+            'OG0023785']).apply(lambda x: x in taxon2count['Picozoa']).sum()
+
 tbl = pd.read_csv('taxonomy_orthofinder_selection.csv', sep='\t')
 taxon2label = {}
 for t in focus_taxa:
@@ -190,7 +205,7 @@ for t in ['Pedospumella_elongata', 'Paraphysomonas_bandaiensis',
       'Polytomella', 'Goniomonas', 'Cryptomonas']:
       cols[t] = 'blue'
 for t in ['Cryptosporidium', 'Hematodinium']:
-    cols[t] = 'darkblue'
+    cols[t] = 'darkred'
 for t in ['Rattus', 'Telonema', 'Dictyostelium', 'Tetrahymena','Thecamonas', 
        'Phytophthora', 'Neurospora']:
        cols[t] = 'black'
@@ -220,7 +235,9 @@ for t1 in df['Taxon']:
     for t2 in df['Taxon']:
         p2p.loc[t1,t2] = len(set(taxon2count[t1]).intersection(set(taxon2count[t2])))
 p2p = p2p[p2p.columns].astype(int)
-sns.heatmap(p2p, xticklabels=True, yticklabels=True, cmap="YlGnBu", ax=axs[1])
+mask = np.zeros_like(p2p)
+mask[np.triu_indices_from(mask)] = True
+sns.heatmap(p2p, xticklabels=True, yticklabels=True, cmap="YlGnBu", ax=axs[1], mask=mask)
 axs[1].set_yticklabels('')
 axs[1].set_xticklabels(df['Label2'])
 axs[1].set_ylabel('')
