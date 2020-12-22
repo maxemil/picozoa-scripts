@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 import copy
+from Bio import SeqIO
 
 # import upsetplot
 PLASTID_GROUP = ['Apicomplexa',
@@ -23,7 +24,6 @@ PLASTID_GROUP = ['Apicomplexa',
                  'Haptophyta',
                  'Ochrophyta',
                  'Paulinella',
-                 'Picozoa',
                  'Rhodelphis',
                  'Rhodophyta']
 
@@ -39,12 +39,18 @@ def find_sisters(tree, mincount, taxon):
                                   taxon, mincount, n.get_children()[0],
                                   plastid_groups):
                 # print(get_mono_clades(n, taxon))
+                for l in n.get_children()[0].iter_leaves():
+                    if l.clade == taxon:
+                        arabidopsis_egts.append(l.name)
                 return True
             elif check_cyano_sister(taxa_count_c2, taxa_count_c1, 
                                   plastid_count_c2, plastid_count_c1, 
                                   taxon, mincount, n.get_children()[1],
                                   plastid_groups):
                 # print(get_mono_clades(n, taxon))
+                for l in n.get_children()[1].iter_leaves():
+                    if l.clade == taxon:
+                        arabidopsis_egts.append(l.name)
                 return True
     return False
 
@@ -55,7 +61,7 @@ def check_cyano_sister(tc1, tc2, pc1, pc2, taxon, mincount, lca, plastid_groups)
     if is_clade_monophyletic(pc1, 'plastid') \
             and tc1[taxon] >= mincount \
             and check_direct_sister(lca, taxon, plastid_groups) \
-            and is_clade_monophyletic(tc2, 'Cyanobacteria') \
+            and is_clade_monophyletic(tc2, 'Cyanobacteria', impurity=0.25) \
             and tc2['Cyanobacteria'] >= 2:
         return True
 
@@ -116,24 +122,34 @@ def count_taxa(node):
     for l in node.iter_leaves():
         taxa_count[l.clade] += 1
     return taxa_count
-              
+
+def parse_contamination():
+    contamination_contigs = []
+    for file in glob.glob("../21_contamination_final_assemblies/*contamination.fasta"):
+        for rec in SeqIO.parse(file, 'fasta'):
+            contamination_contigs.append(rec.id.split('.')[0])
+    return contamination_contigs
+                  
 def check_tree(f, taxon):
     tree = ete3.PhyloTree(f, format=2)
+    contamination_contigs = parse_contamination()
     for l in tree.iter_leaves():
         if 'Uroglena_WA34KE' in l.name:
+            l.add_feature(pr_name='clade', pr_value='contamination')
+        elif l.name.split('..')[2].split('.')[0] in contamination_contigs:
             l.add_feature(pr_name='clade', pr_value='contamination')
         else:
             l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
     min_count = 2 if taxon == 'Picozoa' else 1
     if find_sisters(tree, min_count, taxon):
-        shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
-        shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+        # shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
+        # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
         return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
     else:
         tree.set_outgroup(tree.get_midpoint_outgroup())
         if find_sisters(tree, min_count, taxon):
-            shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
-            shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+            # shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
+            # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
             return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
 
 taxon2count = {}
@@ -171,7 +187,7 @@ focus_taxa = ['Rattus',
               'Cryptomonas',
               'Picozoa']
 
-pool = mp.Pool(30)
+pool = mp.Pool(10)
 for taxon in focus_taxa:
     os.makedirs("Orthogroup_Selection_{}/EGTs".format(taxon), exist_ok=True)
     files = glob.glob("Orthogroup_Selection_{}/trees/*.{}.treefile".format(taxon, taxon))
@@ -244,7 +260,7 @@ axs[1].set_ylabel('')
 for tick in axs[1].get_xticklabels():
     tick.set_color(df.loc[df['Label2'] == tick.get_text(), 'Color'].iloc[0])
 plt.tight_layout()
-plt.savefig('EGT_groups_90.pdf')
+plt.savefig('EGT_groups.pdf')
 plt.clf()
 
 # tc = upsetplot.from_contents(taxon2count)
