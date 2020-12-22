@@ -2,10 +2,10 @@ for dir in Orthogroup_LGT_selections/* ;
 do
   taxon=$(echo $dir | sed 's/Orthogroup_LGT_selections\///')
   echo $taxon
-  mkdir $dir/fast_trees
-  mkdir $dir/orthogroups
-  
-  mv $dir/OG*.fa $dir/orthogroups
+  # mkdir $dir/fast_trees
+  # mkdir $dir/orthogroups
+  # 
+  # mv $dir/OG*.fa $dir/orthogroups
   
   for fa in $dir/orthogroups/*;
   do

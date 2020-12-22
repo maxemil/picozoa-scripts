@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 import copy
-
+from Bio import SeqIO
 
 def find_sisters(tree, mincount, taxon, group):
     plastid_groups = [taxon, group]
@@ -94,34 +94,71 @@ def count_taxa(node):
     for l in node.iter_leaves():
         taxa_count[l.clade] += 1
     return taxa_count
-              
+
+def parse_contamination():
+    contamination_contigs = []
+    for file in glob.glob("../21_contamination_final_assemblies/*contamination.fasta"):
+        for rec in SeqIO.parse(file, 'fasta'):
+            contamination_contigs.append(rec.id.split('.')[0])
+    return contamination_contigs
+
 def check_tree(f, taxon, group):
     tree = ete3.PhyloTree(f, format=2)
+    contamination_contigs = parse_contamination()
     for l in tree.iter_leaves():
         if 'Uroglena_WA34KE' in l.name:
+            l.add_feature(pr_name='clade', pr_value='contamination')
+        elif l.name.split('..')[2].split('.')[0] in contamination_contigs:
             l.add_feature(pr_name='clade', pr_value='contamination')
         else:
             l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
     min_count = 2 if taxon == 'Picozoa' else 1
     if find_sisters(tree, min_count, taxon, group):
-        shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
-        shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+        # shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
+        # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
         return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
     else:
         tree.set_outgroup(tree.get_midpoint_outgroup())
         if find_sisters(tree, min_count, taxon, group):
-            shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
-            shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+            # shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
+            # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
             return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
 
 taxon2count = {}
 focus_taxa = [('Picozoa', 'Picozoa'),
-              ('Chloropicon', 'Chloroplastida'),
+              ('Chloropicon', 'Chlorophyta'),
               ('Telonema', 'Telonema'),
               ('Cyanophora', 'Glaucophyta'),
               ('Galdieria', 'Rhodophyta'),
               ('Paulinella', 'Paulinella'),
-              ('Rhodelphis', 'Rhodelphis')]
+              ('Rhodelphis', 'Rhodelphis'),
+              ('Rattus','Metazoa'),
+              ('Dictyostelium','Amoebozoa'),
+              ('Tetrahymena','Ciliophora'),
+              ('Thecamonas','Apusomonadida'),
+              ('Phytophthora','Peronosporomycetes'),
+              ('Neurospora','Fungi'),
+              ('Arabidopsis','Streptophyta'),
+              ('Emiliania','Haptophyta'),
+              ('Bigelowiella','Chlorarachniophyceae'),
+              ('Leptocylindrus','Diatomeae'),
+              ('Guillardia','Cryptophyceae'),
+              ('Vitrella','Colpodellida'),
+              ('Alexandrium','Dinoflagellata'),
+              ('Toxoplasma','Apicomplexa'),
+              ('Cryptosporidium','Apicomplexa'),
+              ('Hematodinium','Dinoflagellata'),
+              ('Helicosporidium','Chlorophyta'),
+              ('Goniomonas','Cryptophyceae'),
+              ('Cryptomonas','Cryptophyceae'),
+              ('Dinobryon_sp_UTEXLB2267','Chrysophyceae'),
+              ('Ochromonadales_sp_CCMP2298','Chrysophyceae'),
+              ('Pedospumella_elongata','Chrysophyceae'),
+              ('Paraphysomonas_bandaiensis','Chrysophyceae'),
+              ('Spumella_bureschii_JBL14','Chrysophyceae'),
+              ('Mallomonas','Chrysophyceae')]
+
+# focus_taxa = [('Picozoa', 'Picozoa')]
 
 
 pool = mp.Pool(30)
@@ -155,12 +192,12 @@ for t in ['Galdieria', 'Chloropicon', 'Arabidopsis', 'Cyanophora', 'Emiliania',
       cols[t] = 'green' 
 for t in ['Pedospumella_elongata', 'Paraphysomonas_bandaiensis',
       'Spumella_bureschii_JBL14', 'Rhodelphis', 'Toxoplasma', 'Helicosporidium',
-      'Polytomella', 'Goniomonas', 'Cryptomonas']:
+      'Polytomella', 'Cryptomonas']:
       cols[t] = 'blue'
 for t in ['Cryptosporidium', 'Hematodinium']:
     cols[t] = 'darkred'
 for t in ['Rattus', 'Telonema', 'Dictyostelium', 'Tetrahymena','Thecamonas', 
-       'Phytophthora', 'Neurospora']:
+       'Phytophthora', 'Neurospora', 'Goniomonas']:
        cols[t] = 'black'
 cols['Picozoa'] = 'red'
 
@@ -183,24 +220,26 @@ ax.spines["top"].set_visible(False)
 ax.spines["bottom"].set_visible(False)
 ax.spines["left"].set_visible(False)
 
-# p2p = pd.DataFrame(index=df['Taxon'], columns=df['Taxon'])
-# for t1 in df['Taxon']:
-#     for t2 in df['Taxon']:
-#         p2p.loc[t1,t2] = len(set(taxon2count[t1]).intersection(set(taxon2count[t2])))
-# p2p = p2p[p2p.columns].astype(int)
-# mask = np.zeros_like(p2p)
-# mask[np.triu_indices_from(mask)] = True
-# sns.heatmap(p2p, xticklabels=True, yticklabels=True, cmap="YlGnBu", ax=axs[1], mask=mask)
-# axs[1].set_yticklabels('')
-# axs[1].set_xticklabels(df['Label2'])
-# axs[1].set_ylabel('')
-# for tick in axs[1].get_xticklabels():
-#     tick.set_color(df.loc[df['Label2'] == tick.get_text(), 'Color'].iloc[0])
+
 plt.tight_layout()
 plt.savefig('LGT_groups.pdf')
-plt.clf()
+plt.close()
 
-# tc = upsetplot.from_contents(taxon2count)
-# fig, axs = plt.subplots(figsize=(30,40))
-# upsetplot.plot(tc, sort_by='cardinality', fig=fig, show_counts=True)
-# plt.savefig('test.pdf')
+df['EGT_count'] = df['Taxon'].apply(lambda x: len(taxon2count[x]))
+df['EGT/LGT Ratio'] =  df['EGT_count'] / df['Count']
+df.sort_values(by='EGT/LGT Ratio', inplace=True)
+
+fig, ax = plt.subplots(1, 1, figsize=(10,5))
+sns.barplot(x="EGT/LGT Ratio", y="Label2", data=df, palette=df['Color'], ax=ax)
+ax.set_ylabel('Taxon')
+
+for tick in ax.get_yticklabels():
+    tick.set_color(df.loc[df['Label2'] == tick.get_text(), 'Color'].iloc[0])
+ax.spines["right"].set_visible(False)
+ax.spines["top"].set_visible(False)
+ax.spines["bottom"].set_visible(False)
+ax.spines["left"].set_visible(False)
+
+plt.tight_layout()
+plt.savefig('Ratio_groups.pdf')
+plt.close()

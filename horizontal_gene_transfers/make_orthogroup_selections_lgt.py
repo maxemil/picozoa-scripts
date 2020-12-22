@@ -7,17 +7,44 @@ from collections import defaultdict
 
 tbl = pd.read_csv('taxonomy_orthofinder_selection.csv', sep='\t')
 
-focus_taxa = ['Rhodelphis',
-              'Picozoa',
-              'Galdieria',
-              'Chloropicon',
-              'Cyanophora',
-              'Paulinella',
-              'Telonema']
+focus_taxa = ['Dinobryon_sp_UTEXLB2267',
+              'Ochromonadales_sp_CCMP2298',
+              'Pedospumella_elongata',
+              'Paraphysomonas_bandaiensis',
+              'Spumella_bureschii_JBL14',
+              'Toxoplasma',
+              'Cryptosporidium',
+              'Hematodinium',
+              'Helicosporidium',
+              'Polytomella', 
+              'Goniomonas',
+              'Cryptomonas']
+
+# focus_taxa = ['Rhodelphis',
+#               'Picozoa',
+#               'Galdieria',
+#               'Chloropicon',
+#               'Cyanophora',
+#               'Paulinella',
+#               'Telonema',
+              # 'Rattus',
+              # 'Dictyostelium',
+              # 'Tetrahymena',
+              # 'Thecamonas',
+              # 'Phytophthora',
+              # 'Neurospora',
+              # 'Arabidopsis',
+              # 'Emiliania',
+              # 'Bigelowiella',
+              # 'Leptocylindrus',
+              # 'Guillardia',
+              # 'Vitrella',
+              # 'Mallomonas',
+              # 'Alexandrium']
               
 for focus_taxon in focus_taxa:
     tbl = pd.read_csv('taxonomy_orthofinder_selection.csv', sep='\t')
-    tbl.loc[tbl['taxonomy'].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
+    tbl.loc[tbl['Name'].apply(lambda x: focus_taxon in x), 'group'] = focus_taxon
     tblgroups = set(tbl['group'])
     
     selection = []
