@@ -114,14 +114,14 @@ def check_tree(f, taxon, group):
             l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
     min_count = 2 if taxon == 'Picozoa' else 1
     if find_sisters(tree, min_count, taxon, group):
-        # shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
-        # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+        shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
+        shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
         return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
     else:
         tree.set_outgroup(tree.get_midpoint_outgroup())
         if find_sisters(tree, min_count, taxon, group):
-            # shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
-            # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+            shutil.copyfile(f, "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f)))
+            shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_LGT_selections/{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
             return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
 
 taxon2count = {}
@@ -149,6 +149,7 @@ focus_taxa = [('Picozoa', 'Picozoa'),
               ('Cryptosporidium','Apicomplexa'),
               ('Hematodinium','Dinoflagellata'),
               ('Helicosporidium','Chlorophyta'),
+              ('Polytomella','Chlorophyta'),
               ('Goniomonas','Cryptophyceae'),
               ('Cryptomonas','Cryptophyceae'),
               ('Dinobryon_sp_UTEXLB2267','Chrysophyceae'),
@@ -161,7 +162,7 @@ focus_taxa = [('Picozoa', 'Picozoa'),
 # focus_taxa = [('Picozoa', 'Picozoa')]
 
 
-pool = mp.Pool(30)
+pool = mp.Pool(44)
 for taxon, group in focus_taxa:
     os.makedirs("Orthogroup_LGT_selections/{}/EGTs".format(taxon), exist_ok=True)
     files = glob.glob("Orthogroup_LGT_selections/{}/fast_trees/*.{}.treefile".format(taxon, taxon))
@@ -171,6 +172,9 @@ for taxon, group in focus_taxa:
     taxon2count[taxon] = results
 pool.close()
 
+from collections import Counter
+df = pd.DataFrame({k:Counter(v) for k, v in taxon2count.items()}).T.fillna(0).astype(int)
+df.T.to_csv('LGT_OGs.csv', sep='\t', index=True, header=True)
 
 pd.Series(['OG0001421','OG0001259','OG0002552','OG0002725','OG0003800','OG0003816',
             'OG0004004','OG0004116','OG0004388','OG0009417','OG0011992','OG0018782',

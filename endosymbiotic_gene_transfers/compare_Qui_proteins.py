@@ -2,6 +2,7 @@ import glob
 import ete3
 import os
 from Bio import Entrez
+from Bio import SeqIO
 
 def get_acc_for_gi():
     Entrez.email = 'max-emil.schon@icm.uu.se'
@@ -95,26 +96,45 @@ def get_records(accessions):
                         rec2organelle[rec.id] = f.qualifiers['organelle'][0]
     return (records, rec2locus, rec2organelle)
 
-egt_trees = [os.path.basename(f).split('.')[0] for f in glob.glob('../Orthogroup_Selection_Chloropicon/EGTs/*.treefile')]
-
-unrecognized_egt = []
-for treefile in glob.glob('../Orthogroup_Selection_Chloropicon/trees/*Chloropicon.treefile'):
-    if not os.path.basename(treefile).split('.')[0] in egt_trees:
-        tree = ete3.PhyloTree(treefile)
-        for l in tree.iter_leaves():
-            if any([l.name.split('..')[2] in p for p in qui_egt_crei]):
-                unrecognized_egt.append(treefile)
-
+def plot_overlap(set1, set2, set3):
+    from matplotlib_venn import venn3
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(4,4))
+    venn3([set1, set2, set3], ('Qiu et al.', 'This study', 'on plastid genome'))
+    plt.title("EGT overlap with Qiu et al.")
+    plt.savefig('EGT_overlap_qui.pdf')
+    
 
 gi2acc = get_acc_for_gi()
-
 a_thaliana = parse_protein_map('../protein_maps_orthofinder/Arabidopsis_thaliana.map')
+
 qui_egt_prots = get_overlap(gi2acc, a_thaliana)
 qui_egt_prots = [format_prot_ids(p, 'Arabidopsis') for p in qui_egt_prots]
 max_egt_prots = get_predicted_egt('../Orthogroup_Selection_Arabidopsis/EGTs', 'Arabidopsis..Arabidopsis')
+# max_egt_prots = set([line.split()[1] for line in open('../arabidopsis_egts.csv')])
 max_egt_acc = get_accessions_from_prots(max_egt_prots, a_thaliana, 'Arabidopsis')
+qui_egt_acc = get_accessions_from_prots(qui_egt_prots, a_thaliana, 'Arabidopsis')
 records, rec2locus, rec2organelle = get_records(max_egt_acc)
+plastid_acc = set(rec2organelle.keys())
+# skip this since qui et al do not include chloroplast-localized proteins
+# records, rec2locus, rec2organelle = get_records(qui_egt_acc)
+# plastid_acc = plastid_acc.update(set(rec2organelle.keys()))
+plot_overlap(set(qui_egt_acc), set(max_egt_acc), plastid_acc)
 
-c_reinhardtii = parse_protein_map('../protein_maps_orthofinder/Chlamydomonas_reinhardtii.map')
-qui_egt_prots = get_overlap(qui_gi, c_reinhardtii)
-qui_egt_prots = format_prot_ids(qui_egt_prots, 'Chloroplastida')
+# check which additional trees were inferred by qiu
+# egt_trees = [os.path.basename(f).split('.')[0] for f in glob.glob('../Orthogroup_Selection_Arabidopsis/EGTs/*.treefile')]
+
+# unrecognized_egt = []
+# for treefile in glob.glob('../Orthogroup_Selection_Arabidopsis/trees/*Arabidopsis.treefile'):
+#     if not os.path.basename(treefile).split('.')[0] in egt_trees:
+#         tree = ete3.PhyloTree(treefile)
+#         for l in tree.iter_leaves():
+#             if any([l.name.split('..')[2] in p for p in qui_egt_prots]):
+#                 unrecognized_egt.append(treefile)
+
+
+
+# do the same for Chlamydomonas/Chloropicon
+# c_reinhardtii = parse_protein_map('../protein_maps_orthofinder/Chlamydomonas_reinhardtii.map')
+# qui_egt_prots = get_overlap(qui_gi, c_reinhardtii)
+# qui_egt_prots = format_prot_ids(qui_egt_prots, 'Chloroplastida')

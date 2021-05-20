@@ -28,7 +28,8 @@ PLASTID_GROUP = ['Apicomplexa',
                  'Rhodophyta']
 
 
-def find_sisters(tree, mincount, taxon):
+def find_sisters(tree, mincount, taxon, arabidopsis_egts):
+    found_sister = False
     plastid_groups = PLASTID_GROUP + [taxon]
     for n in tree.traverse():
         if not n.is_leaf():
@@ -42,7 +43,7 @@ def find_sisters(tree, mincount, taxon):
                 for l in n.get_children()[0].iter_leaves():
                     if l.clade == taxon:
                         arabidopsis_egts.append(l.name)
-                return True
+                found_sister = True
             elif check_cyano_sister(taxa_count_c2, taxa_count_c1, 
                                   plastid_count_c2, plastid_count_c1, 
                                   taxon, mincount, n.get_children()[1],
@@ -51,8 +52,8 @@ def find_sisters(tree, mincount, taxon):
                 for l in n.get_children()[1].iter_leaves():
                     if l.clade == taxon:
                         arabidopsis_egts.append(l.name)
-                return True
-    return False
+                found_sister = True
+    return found_sister
 
 def check_cyano_sister(tc1, tc2, pc1, pc2, taxon, mincount, lca, plastid_groups):
     if taxon == 'Picozoa':
@@ -61,7 +62,7 @@ def check_cyano_sister(tc1, tc2, pc1, pc2, taxon, mincount, lca, plastid_groups)
     if is_clade_monophyletic(pc1, 'plastid') \
             and tc1[taxon] >= mincount \
             and check_direct_sister(lca, taxon, plastid_groups) \
-            and is_clade_monophyletic(tc2, 'Cyanobacteria', impurity=0.25) \
+            and is_clade_monophyletic(tc2, 'Cyanobacteria', impurity=0.15) \
             and tc2['Cyanobacteria'] >= 2:
         return True
 
@@ -129,8 +130,9 @@ def parse_contamination():
         for rec in SeqIO.parse(file, 'fasta'):
             contamination_contigs.append(rec.id.split('.')[0])
     return contamination_contigs
-                  
+    
 def check_tree(f, taxon):
+    arabidopsis_egts = []
     tree = ete3.PhyloTree(f, format=2)
     contamination_contigs = parse_contamination()
     for l in tree.iter_leaves():
@@ -141,15 +143,21 @@ def check_tree(f, taxon):
         else:
             l.add_feature(pr_name='clade', pr_value=l.name.split('..')[0])
     min_count = 2 if taxon == 'Picozoa' else 1
-    if find_sisters(tree, min_count, taxon):
+    if find_sisters(tree, min_count, taxon, arabidopsis_egts):
         # shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
         # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+        with open('arabidopsis_egts.csv', 'a') as out:
+            for p in arabidopsis_egts:
+                print("{}\t{}".format(f, p), file=out)
         return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
     else:
         tree.set_outgroup(tree.get_midpoint_outgroup())
-        if find_sisters(tree, min_count, taxon):
+        if find_sisters(tree, min_count, taxon, arabidopsis_egts):
             # shutil.copyfile(f, "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f)))
             # shutil.copyfile(f.replace('treefile', 'nex'), "Orthogroup_Selection_{}/EGTs/{}".format(taxon, os.path.basename(f).replace('treefile', 'nex')))
+            with open('arabidopsis_egts.csv', 'a') as out:
+                for p in arabidopsis_egts:
+                    print("{}\t{}".format(f, p), file=out)
             return os.path.basename(f).replace('.{}.treefile'.format(taxon), '')
 
 taxon2count = {}
@@ -187,16 +195,19 @@ focus_taxa = ['Rattus',
               'Cryptomonas',
               'Picozoa']
 
-pool = mp.Pool(10)
+pool = mp.Pool(4)
 for taxon in focus_taxa:
     os.makedirs("Orthogroup_Selection_{}/EGTs".format(taxon), exist_ok=True)
-    files = glob.glob("Orthogroup_Selection_{}/trees/*.{}.treefile".format(taxon, taxon))
+    files = glob.glob("Orthogroup_Selection_{}/EGTs/*.{}.treefile".format(taxon, taxon))
     results = pool.starmap(check_tree, list(zip(files, [taxon] * len(files))))
     results = [i for i in results if i]
     print(taxon, len(results))
     taxon2count[taxon] = results
 pool.close()
 
+from collections import Counter
+df = pd.DataFrame({k:Counter(v) for k, v in taxon2count.items()}).T.fillna(0).astype(int)
+df.T.to_csv('EGT_OGs.csv', sep='\t', index=True, header=True)
 
 pd.Series(['OG0001421','OG0001259','OG0002552','OG0002725','OG0003800','OG0003816',
             'OG0004004','OG0004116','OG0004388','OG0009417','OG0011992','OG0018782',
