@@ -19,9 +19,7 @@ iqtree2 -s 67_selection/67taxa_317genes_BMGE/concatenation/Picozoa_67taxa_317gen
        -au \
        -zw \
        -nt 20 \
-       -mem 70GB \
-       -redo
-
+       -mem 70GB 
        # 
        # Tree      logL    deltaL  bp-RELL    p-KH     p-SH    p-WKH    p-WSH       c-ELW       p-AU
        # -------------------------------------------------------------------------------------------
